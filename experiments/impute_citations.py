@@ -21,7 +21,7 @@ class MySCNN(nn.Module):
         self.colors = colors
 
         num_filters = 30 #20
-        variance = 0.01 #0.001
+        variance = 0.1 #0.001
 
         # Degree 0 convolutions.
         self.C0_1 = scnn.scnn.SimplicialConvolution(5, self.colors, num_filters*self.colors, variance=variance)
@@ -105,10 +105,10 @@ def main():
 
     learning_rate = 0.001
     optimizer = torch.optim.Adam(network.parameters(), lr=learning_rate)
-    criterion = nn.L1Loss(reduction="sum")
-    #criterion = nn.MSELoss(reduction="sum")
-
-    batch_size = 1
+    criterion = nn.SmoothL1Loss(reduction="mean")
+    test_train_split = 0.8
+    batch_size = 5
+    train_iterations = 100
 
     num_params = 0
     print("Parameter counts:")
@@ -124,48 +124,74 @@ def main():
 
     losslogf = open("%s/loss.txt" %(logdir), "w")
 
-    cochain_target_alldegs = []
+    cochain_train_target_alldegs = []
+    cochain_test_target_alldegs = []
     signal = np.load('{}/{}_cochains.npy'.format(prefix,starting_node),allow_pickle=True)
     raw_data=[list(signal[i].values()) for i in range(len(signal))]
     for d in range(0, topdim+1):
-        cochain_target = torch.zeros((batch_size, 1, len(raw_data[d])), dtype=torch.float, requires_grad = False)
+
+        train_test_cutoff = int(test_train_split * len(raw_data))
+        cochain_train_target = torch.zeros(
+            (batch_size, 1, train_test_cutoff), dtype=torch.float,
+            requires_grad = False)
+        cochain_test_target = torch.zeros(
+            (batch_size, 1, len(raw_data[d]) - train_test_cutoff),
+            dtype=torch.float, requires_grad=False)
+
         for i in range(0, batch_size):
-            cochain_target[i, 0, :] = torch.tensor(raw_data[d], dtype=torch.float, requires_grad = False)
+            cochain_train_target[i, 0, :] = torch.tensor(
+                raw_data[d][: train_test_cutoff], dtype=torch.float,
+                requires_grad = False)
+            cochain_test_target[i, 0, :] = torch.tensor(
+                raw_data[d][train_test_cutoff :], dtype=torch.float,
+                requires_grad=False)
 
-        cochain_target_alldegs.append(cochain_target)
+        cochain_train_target_alldegs.append(cochain_train_target)
+        cochain_test_target_alldegs.append(cochain_test_target)
 
-    cochain_input_alldegs = []
-    signal = np.load('{}/{}_percentage_{}_input_damaged.npy'.format(prefix,starting_node,percentage_missing_values),allow_pickle=True)
-    raw_data=[list(signal[i].values()) for i in range(len(signal))]
+    cochain_train_input_alldegs = []
+    cochain_test_input_alldegs = []
+    signal = np.load('{}/{}_percentage_{}_input_damaged.npy'.format(
+        prefix,starting_node,percentage_missing_values),allow_pickle=True)
+    raw_data = [list(signal[i].values()) for i in range(len(signal))]
     for d in range(0, topdim+1):
 
-        cochain_input = torch.zeros((batch_size, 1, len(raw_data[d])), dtype=torch.float, requires_grad = False)
+        train_test_cutoff = int(test_train_split * len(raw_data))
+        cochain_train_input = torch.zeros(
+            (batch_size, 1, train_test_cutoff), dtype=torch.float,
+            requires_grad = False)
+        cochain_test_input = torch.zeros(
+            (batch_size, 1, len(raw_data[d]) - train_test_cutoff),
+            dtype=torch.float, requires_grad=False)
 
         for i in range(0, batch_size):
-            cochain_input[i, 0, :] = torch.tensor(raw_data[d], dtype=torch.float, requires_grad = False)
+            cochain_train_input[i, 0, :] = torch.tensor(
+                raw_data[d][: train_test_cutoff], dtype=torch.float,
+                requires_grad = False)
+            cochain_test_input[i, 0, :] = torch.tensor(
+                raw_data[d][train_test_cutoff :], dtype=torch.float,
+                requires_grad=False)
 
-        cochain_input_alldegs.append(cochain_input)
-
-    #cochain_target_alldegs[0] = torch.zeros_like(cochain_target_alldegs[0])
-    #cochain_target_alldegs[2] = torch.zeros_like(cochain_target_alldegs[2])
-
-    #cochain_input_alldegs[0] = torch.zeros_like(cochain_input_alldegs[0])
-    #cochain_input_alldegs[2] = torch.zeros_like(cochain_input_alldegs[2])
+        cochain_train_input_alldegs.append(cochain_train_input)
+        cochain_test_input_alldegs.append(cochain_test_input)
 
     print([float(len(masks[d]))/float(len(cochain_target_alldegs[d][0,0,:])) for d in range(0,2+1)])
 
-    for i in range(0, 1000):
-        xs = [cochain_input.clone() for cochain_input in cochain_input_alldegs]
-
+    for i in range(0, train_iterations):
+        train_xs = [
+            cochain_input.clone() for cochain_input in
+            cochain_train_input_alldegs
+        ]
         optimizer.zero_grad()
-        ys = network(Ls, Ds, adDs, xs)
+        train_ys = network(Ls, Ds, adDs, train_xs)
 
         loss = torch.FloatTensor([0.0])
         for b in range(0, batch_size):
             for d in range(0, topdim+1):
-                loss += criterion(ys[d][b, 0, masks[d]], cochain_target_alldegs[d][b, 0, masks[d]])
-
-        detached_ys = [ys[d].detach() for d in range(0, topdim+1)]
+                loss += criterion(
+                    train_ys[d][b, 0, masks[d]],
+                    cochain_train_target_alldegs[d][b, 0, masks[d]])
+        detached_ys = [train_ys[d].detach() for d in range(0, topdim+1)]
 
         if np.mod(i, 10) == 0:
             for d in range(0,topdim+1):
@@ -192,10 +218,23 @@ def main():
         loss.backward()
         optimizer.step()
 
+    # Generate metrics on test set
+    test_xs = [
+        cochain_input.clone() for cochain_input in
+        cochain_train_input_alldegs
+    ]
+    loss = torch.FloatTensor([0.0])
+    test_ys = network(Ls, Ds, adDs, test_xs)
+
+    for b in range(0, batch_size):
+        for d in range(0, topdim + 1):
+            loss += criterion(
+                test_ys[d][b, 0, masks[d]],
+                cochain_test_target_alldegs[d][b, 0, masks[d]])
+
+    losslogf.write(f"Test set loss: {loss.item()}\n")
+    losslogf.flush()
     losslogf.close()
-
-    name_networks=['C0_1,C0_2','C0_3','C1_1,C1_2','C1_3', 'C2_1,C2_2','C2_3']
-
 
 
 if __name__ == "__main__":
