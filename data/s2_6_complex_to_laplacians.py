@@ -10,6 +10,7 @@ import numpy as np
 from scipy import sparse
 from scipy.sparse import coo_matrix
 from random import shuffle
+from sys import argv
 
 import time
 
@@ -78,13 +79,17 @@ if __name__ == '__main__':
     def timeit(name):
         print('wall time ({}): {:.0f}s'.format(name, time.time() - start))
 
-    starting_node=150250
-    simplices=np.load(f's2_3_collaboration_complex/{starting_node}_simplices.npy')
+    if len(argv) <= 1:
+        starting_node=150250
+        in_path = f's2_3_collaboration_complex/{starting_node}_simplices'
+    else:
+        in_path = f's2_3_collaboration_complex/{argv[1]}'
 
-    boundaries=build_boundaries(simplices)
-    laplacians=build_laplacians(boundaries)
+    simplices = np.load(in_path + '.npy')
+    boundaries = build_boundaries(simplices)
+    laplacians = build_laplacians(boundaries)
 
     timeit('process')
-    np.save(f's2_3_collaboration_complex/{starting_node}_laplacians.npy', laplacians)
-    np.save(f's2_3_collaboration_complex/{starting_node}_boundaries.npy', boundaries)
+    np.save(in_path + '_laplacians.npy', laplacians, allow_pickle=True)
+    np.save(in_path + '_boundaries.npy', boundaries, allow_pickle=True)
     timeit('total')

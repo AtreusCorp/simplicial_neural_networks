@@ -4,6 +4,7 @@ from typing import Dict, Set, List, Iterable, Frozenset
 from collections import defaultdict
 from itertools import combinations
 from sys import argv
+import numpy as np
 
 def parse_snap_edgesets(file_path: str) -> Dict[str, Set[str]]:
     """ Given an edge file from SNAPs Facebook dataset, parse it into a dict.
@@ -107,6 +108,7 @@ def build_cochains(
                 idx += 1
 
 if __name__ == '__main__':
+
     # Generate simplicial and cochain complexes from given data
     friend_dict = parse_snap_edgesets(file_path=argv[1])
     cochains = build_cochains(friend_dict=friend_dict, top_deg=4)
