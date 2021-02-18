@@ -1,9 +1,10 @@
 """Provides utilities to parse and process SNAP Facebook connection data"""
 
-from typing import Dict, Set, List, Iterable, Frozenset
+from typing import Dict, Set, List, Iterable, Tuple
 from collections import defaultdict
 from itertools import combinations
 from sys import argv
+from functools import lru_cache
 import numpy as np
 
 def parse_snap_edgesets(file_path: str) -> Dict[str, Set[str]]:
@@ -21,11 +22,11 @@ def parse_snap_edgesets(file_path: str) -> Dict[str, Set[str]]:
         user IDs
     """
 
-    friend_dict = defaultdict(set())
+    friend_dict = defaultdict(set)
 
     with open(file_path, 'r') as file:
         for line in file:
-            user, friend = *line.split()
+            user, friend = line.split()
             friend_dict[user].add(friend)
     return friend_dict
 
@@ -44,74 +45,54 @@ def cochain_val(
 
     if not users:
         return 0
-    mutual_friends = friend_dict[users.pop()]
+    return len(set.intersection(*(friend_dict[user] for user in users)))
 
-    for user in users:
-        mutual_friends &= friend_dict[user]
-    return len(mutual_friends)
-
-def build_simplices(
-    friend_dict: Dict[
-        str, Set[str]], top_deg: int) -> Dict[int, Dict[Frozenset[str], int]]:
+def build_simplices_cochains(
+    friend_dict: Dict[str, Set[str]], top_deg: int) -> Tuple[
+Dict[int, Dict[frozenset[str], int]], Dict[int, Dict[frozenset[str], int]]]:
 
     """ Builds a simplicial complex from friend_dict.
 
-    Constructs a dict mapping degree (int) to dict. The value dict maps a
-    frozenset of user id's (strings) to a unique identifier for that degree.
+    Constructs one list of dicts who map a frozenset of user ids (strings) to
+    a unique identifier for that degree. The other list of dicts contain maps
+    from user ids to cochain values.
 
     Args:
         friend_dict: The dictionary of friend relationships
         top_deg: The top degree simplex to build
 
     Returns:
-        A dict mapping degree to dicts. The value dicts map sets of user ID
-        to ints
+        A tuple of lists of dicts. One list contains dicts which map user
+        IDs to unique simplex identifiers. The other contains dicts mapping
+        user IDs to cochain values.
     """
 
-    simplicial_complex = defaultdict(dict())
+    simplicial_complex = []
+    cochain_complex = []
     for deg in range(top_deg):
+        simplicial_complex.append(dict())
+        cochain_complex.append(dict())
         idx = 0
+
         for users in combinations(friend_dict.keys(), deg + 1):
             mutual_val = cochain_val(users=users, friend_dict=friend_dict)
 
             if mutual_val:
                 simplicial_complex[deg][frozenset(users)] = idx
+                cochain_complex[deg][frozenset(users)] = mutual_val
                 idx += 1
-    return simplicial_complex
-
-def build_cochains(
-    friend_dict: Dict[
-        str, Set[str]], top_deg: int) -> Dict[int, Dict[Frozenset[str], int]]:
-
-    """ Builds a cochain complex from friend_dict.
-
-    Constructs a dict mapping degree (int) to dict. The value dict maps a
-    frozenset of user id's (strings) to the simplex cochain value.
-
-    Args:
-        friend_dict: The dictionary of friend relationships
-        top_deg: The top degree simplex to build
-
-    Returns:
-        A dict mapping degree to dicts. The value dicts map sets of user ID
-        to their cochain value
-    """
-
-    cochain_complex = defaultdict(dict())
-    for deg in range(top_deg):
-        idx = 0
-        for users in combinations(friend_dict.keys(), deg + 1):
-            mutual_val = cochain_val(users=users, friend_dict=friend_dict)
-
-            if mutual_val:
-                cochain_complex[deg][frozenset(users)] = idx
-                idx += 1
+    return simplicial_complex, cochain_complex
 
 if __name__ == '__main__':
 
     # Generate simplicial and cochain complexes from given data
+    assert len(argv)
     friend_dict = parse_snap_edgesets(file_path=argv[1])
-    cochains = build_cochains(friend_dict=friend_dict, top_deg=4)
-    simplices = build_simplices(friend_dict=friend_dict, top_deg=4)
-    np.save(f's2_3_collaboration_complex/snap_facebook_cochains.npy', cochains)
-    np.save(f's2_3_collaboration_complex/snap_facebook_simplices.npy', simplices)
+    print(f'Parsed file {argv[1]}')
+    simplices, cochains = build_simplices_cochains(
+        friend_dict=friend_dict, top_deg=3)
+    print('Built complex')
+    np.save(
+        f's2_3_collaboration_complex/snap_facebook_cochains.npy', cochains)
+    np.save(
+        f's2_3_collaboration_complex/snap_facebook_simplices.npy', simplices)

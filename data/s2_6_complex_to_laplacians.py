@@ -80,12 +80,12 @@ if __name__ == '__main__':
         print('wall time ({}): {:.0f}s'.format(name, time.time() - start))
 
     if len(argv) <= 1:
-        starting_node=150250
+        starting_node = 150250
         in_path = f's2_3_collaboration_complex/{starting_node}_simplices'
     else:
-        in_path = f's2_3_collaboration_complex/{argv[1]}'
+        in_path = f's2_3_collaboration_complex/{argv[1]}_simplices'
 
-    simplices = np.load(in_path + '.npy')
+    simplices = np.load(in_path + '.npy', allow_pickle=True)
     boundaries = build_boundaries(simplices)
     laplacians = build_laplacians(boundaries)
 
