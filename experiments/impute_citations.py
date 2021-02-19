@@ -290,7 +290,7 @@ def train_and_test(hparams: Hparams):
     print(f'Test set loss: {loss}')
 
 if __name__ == "__main__":
-    train_steps = int(sys.argv[5]) if len(sys.argv) > 4 else 30
+    train_steps = int(sys.argv[5]) if len(sys.argv) > 5 else 30
     new_hparams = Hparams(
         learning_rate=0.01,
         batch_size=1,
@@ -309,6 +309,6 @@ if __name__ == "__main__":
         loss_criterion=nn.L1Loss(reduction="sum"),
         res_add=False,
     )
-    hparam_set = new_hparams if sys.argv[6] == 'new' and len(
-        sys.argv) > 5 else 'original'
+    hparam_set = new_hparams if len(
+        sys.argv) > 6 and sys.argv[6] == 'new' else original_hparams
     train_and_test(hparam_set)
