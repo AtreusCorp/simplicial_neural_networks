@@ -291,7 +291,7 @@ def train_and_test(hparams: Hparams):
 
 if __name__ == "__main__":
     train_steps = int(sys.argv[5]) if len(sys.argv) > 4 else 30
-    atreus_hparams = Hparams(
+    new_hparams = Hparams(
         learning_rate=0.01,
         batch_size=1,
         train_steps=train_steps,
@@ -309,4 +309,6 @@ if __name__ == "__main__":
         loss_criterion=nn.L1Loss(reduction="sum"),
         res_add=False,
     )
-    train_and_test(original_hparams)
+    hparam_set = new_hparams if sys.argv[6] == 'new' and len(
+        sys.argv) > 5 else 'original'
+    train_and_test(hparam_set)
