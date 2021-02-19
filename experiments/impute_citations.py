@@ -79,32 +79,31 @@ def main():
     torch.manual_seed(1337)
     np.random.seed(1337)
 
-
-    prefix = sys.argv[1] ##input
-
-    logdir = sys.argv[2] ##output
+    prefix = sys.argv[1] # Input
+    logdir = sys.argv[2] # Output
     starting_node=sys.argv[3]
     percentage_missing_values=sys.argv[4]
     cuda = False
 
-    topdim = 2
-
-
-    laplacians = np.load('{}/{}_laplacians.npy'.format(prefix,starting_node),allow_pickle=True)
-    boundaries = np.load('{}/{}_boundaries.npy'.format(prefix,starting_node),allow_pickle=True)
-
-    Ls =[scnn.scnn.coo2tensor(scnn.chebyshev.normalize(laplacians[i],half_interval=True)) for i in range(topdim+1)] #####scnn.chebyshev.normalize ?
-    Ds=[scnn.scnn.coo2tensor(boundaries[i].transpose()) for i in range(topdim+1)]
-    adDs=[scnn.scnn.coo2tensor(boundaries[i]) for i in range(topdim+1)]
-
-    network = MySCNN(colors = 1)
+    laplacians = np.load(
+        '{}/{}_laplacians.npy'.format(prefix,starting_node),allow_pickle=True)
+    boundaries = np.load(
+        '{}/{}_boundaries.npy'.format(prefix,starting_node),allow_pickle=True)
+    Ls =[scnn.scnn.coo2tensor(
+        scnn.chebyshev.normalize(
+            laplacians[i],half_interval=True)) for i in range(topdim + 1)]
+    Ds=[scnn.scnn.coo2tensor(
+            boundaries[i].transpose()) for i in range(topdim + 1)]
+    adDs=[scnn.scnn.coo2tensor(boundaries[i]) for i in range(topdim + 1)]
 
     learning_rate = 0.001
+    batch_size = 5
+    train_steps = 1000
+    topdim = 2
+
+    network = MySCNN(colors = 1)
     optimizer = torch.optim.Adam(network.parameters(), lr=learning_rate)
     criterion = nn.L1Loss(reduction="sum")
-    #criterion = nn.MSELoss(reduction="sum")
-
-    batch_size = 5
 
     num_params = 0
     print("Parameter counts:")
@@ -115,43 +114,53 @@ def main():
     print("Total number of parameters: %d" %(num_params))
 
 
-    masks_all_deg = np.load('{}/{}_percentage_{}_known_values.npy'.format(prefix,starting_node,percentage_missing_values),allow_pickle=True) ## positive mask= indices that we keep ##1 mask #entries 0 degree
+    masks_all_deg = np.load(
+        '{}/{}_percentage_{}_known_values.npy'.format(
+            prefix,starting_node,percentage_missing_values),
+        allow_pickle=True)
     masks=[list(masks_all_deg[i].values()) for i in range(len(masks_all_deg))]
 
     losslogf = open("%s/loss.txt" %(logdir), "w")
 
     cochain_target_alldegs = []
-    signal = np.load('{}/{}_cochains.npy'.format(prefix,starting_node),allow_pickle=True)
+    signal = np.load('{}/{}_cochains.npy'.format(prefix,starting_node),
+        allow_pickle=True)
     raw_data=[list(signal[i].values()) for i in range(len(signal))]
-    for d in range(0, topdim+1):
-        cochain_target = torch.zeros((batch_size, 1, len(raw_data[d])), dtype=torch.float, requires_grad = False)
-        for i in range(0, batch_size):
-            cochain_target[i, 0, :] = torch.tensor(raw_data[d], dtype=torch.float, requires_grad = False)
 
+    for d in range(topdim + 1):
+        cochain_target = torch.zeros((batch_size, 1, len(raw_data[d])),
+            dtype=torch.float, requires_grad = False)
+
+        for i in range(0, batch_size):
+            cochain_target[i, 0, :] = torch.tensor(raw_data[d],
+                dtype=torch.float, requires_grad = False)
         cochain_target_alldegs.append(cochain_target)
 
     cochain_input_alldegs = []
-    signal = np.load('{}/{}_percentage_{}_input_damaged.npy'.format(prefix,starting_node,percentage_missing_values),allow_pickle=True)
+    signal = np.load(
+        '{}/{}_percentage_{}_input_damaged.npy'.format(
+            prefix, starting_node, percentage_missing_values),
+        allow_pickle=True)
     raw_data=[list(signal[i].values()) for i in range(len(signal))]
-    for d in range(0, topdim+1):
 
-        cochain_input = torch.zeros((batch_size, 1, len(raw_data[d])), dtype=torch.float, requires_grad = False)
+    for d in range(topdim + 1):
+        cochain_input = torch.zeros((batch_size, 1, len(raw_data[d])),
+            dtype=torch.float, requires_grad = False)
 
         for i in range(0, batch_size):
-            cochain_input[i, 0, :] = torch.tensor(raw_data[d], dtype=torch.float, requires_grad = False)
-
+            cochain_input[i, 0, :] = torch.tensor(raw_data[d],
+                dtype=torch.float, requires_grad = False)
         cochain_input_alldegs.append(cochain_input)
 
-    #cochain_target_alldegs[0] = torch.zeros_like(cochain_target_alldegs[0])
-    #cochain_target_alldegs[2] = torch.zeros_like(cochain_target_alldegs[2])
+    print(
+        [
+            len(masks[d]) / len(cochain_target_alldegs[d][0,0,:])
+                for d in range(topdim + 1)
+        ])
 
-    #cochain_input_alldegs[0] = torch.zeros_like(cochain_input_alldegs[0])
-    #cochain_input_alldegs[2] = torch.zeros_like(cochain_input_alldegs[2])
-
-    print([float(len(masks[d]))/float(len(cochain_target_alldegs[d][0,0,:])) for d in range(0,2+1)])
-
-    for i in range(0, 1000):
-        xs = [cochain_input.clone() for cochain_input in cochain_input_alldegs]
+    for i in range(train_steps):
+        xs = [cochain_input.clone(
+            ) for cochain_input in cochain_input_alldegs]
 
         optimizer.zero_grad()
         ys = network(Ls, Ds, adDs, xs)
@@ -159,17 +168,20 @@ def main():
         loss = torch.FloatTensor([0.0])
         for b in range(0, batch_size):
             for d in range(0, topdim+1):
-                loss += criterion(ys[d][b, 0, masks[d]], cochain_target_alldegs[d][b, 0, masks[d]])
+                loss += criterion(ys[d][
+                    b, 0, masks[d]], cochain_target_alldegs[d][
+                        b, 0, masks[d]])
 
         detached_ys = [ys[d].detach() for d in range(0, topdim+1)]
 
         if np.mod(i, 10) == 0:
             for d in range(0,topdim+1):
-                np.savetxt("%s/output_%d_%d.txt" %(logdir, i, d), detached_ys[d][0,0,:])
+                np.savetxt(
+                    f'{logdir}/output_{i}_{d}.txt', detached_ys[d][0,0,:])
 
         for d in range(0, topdim+1):
-            predictionlogf = open("%s/prediction_%d_%d.txt" %(logdir, i, d), "w")
-            actuallogf = open("%s/actual_%d_%d.txt" %(logdir, i, d), "w")
+            predictionlogf = open(f'{logdir}/prediction_{i}_{d}.txt', "w")
+            actuallogf = open(f'{logdir}/actual_{i}_{d}.txt', "w")
 
             for b in range(0, batch_size):
                 for y in detached_ys[d][b, 0, masks[d]]:
@@ -184,14 +196,9 @@ def main():
 
         losslogf.write("%d %f\n" %(i, loss.item()))
         losslogf.flush()
-
         loss.backward()
         optimizer.step()
-
     losslogf.close()
-
-    name_networks=['C0_1,C0_2','C0_3','C1_1,C1_2','C1_3', 'C2_1,C2_2','C2_3']
-
 
 
 if __name__ == "__main__":
