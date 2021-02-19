@@ -20,23 +20,23 @@ class MySCNN(nn.Module):
         assert(colors > 0)
         self.colors = colors
 
-        num_filters = 30 #20
-        variance = 0.01 #0.001
+        num_filters = 30
+        variance = 0.01
 
         # Degree 0 convolutions.
-        self.C0_1 = scnn.scnn.SimplicialConvolution(5, self.colors, num_filters*self.colors, variance=variance)
-        self.C0_2 = scnn.scnn.SimplicialConvolution(5, num_filters*self.colors, num_filters*self.colors, variance=variance)
-        self.C0_3 = scnn.scnn.SimplicialConvolution(5, num_filters*self.colors, self.colors, variance=variance)
+        self.C0_1 = scnn.scnn.SimplicialConvolution(5, self.colors, num_filters * self.colors, variance=variance)
+        self.C0_2 = scnn.scnn.SimplicialConvolution(5, num_filters * self.colors, num_filters * self.colors, variance=variance)
+        self.C0_3 = scnn.scnn.SimplicialConvolution(5, num_filters * self.colors, self.colors, variance=variance)
 
         # Degree 1 convolutions.
-        self.C1_1 = scnn.scnn.SimplicialConvolution(5, self.colors, num_filters*self.colors, variance=variance)
-        self.C1_2 = scnn.scnn.SimplicialConvolution(5, num_filters*self.colors, num_filters*self.colors, variance=variance)
-        self.C1_3 = scnn.scnn.SimplicialConvolution(5, num_filters*self.colors, self.colors, variance=variance)
+        self.C1_1 = scnn.scnn.SimplicialConvolution(5, self.colors, num_filters * self.colors, variance=variance)
+        self.C1_2 = scnn.scnn.SimplicialConvolution(5, num_filters * self.colors, num_filters * self.colors, variance=variance)
+        self.C1_3 = scnn.scnn.SimplicialConvolution(5, num_filters * self.colors, self.colors, variance=variance)
 
         # Degree 2 convolutions.
-        self.C2_1 = scnn.scnn.SimplicialConvolution(5, self.colors, num_filters*self.colors, variance=variance)
-        self.C2_2 = scnn.scnn.SimplicialConvolution(5, num_filters*self.colors, num_filters*self.colors, variance=variance)
-        self.C2_3 = scnn.scnn.SimplicialConvolution(5, num_filters*self.colors, self.colors, variance=variance)
+        self.C2_1 = scnn.scnn.SimplicialConvolution(5, self.colors, num_filters * self.colors, variance=variance)
+        self.C2_2 = scnn.scnn.SimplicialConvolution(5, num_filters * self.colors, num_filters * self.colors, variance=variance)
+        self.C2_3 = scnn.scnn.SimplicialConvolution(5, num_filters * self.colors, self.colors, variance=variance)
 
 
 
@@ -75,56 +75,20 @@ class MySCNN(nn.Module):
         #return [torch.zeros_like(xs[0]), out1_3, torch.zeros_like(xs[2])]
         return [out0_3, out1_3, out2_3]
 
-def main():
-    torch.manual_seed(1337)
-    np.random.seed(1337)
+def load_cochains(path, batch_size = 1, topdim = 2):
+    """ Loads the cochains contained at path.
 
-    prefix = sys.argv[1] # Input
-    logdir = sys.argv[2] # Output
-    starting_node=sys.argv[3]
-    percentage_missing_values=sys.argv[4]
-    cuda = False
+    Args:
+        path: the string of the path to load
+        batch_size: the batch size to load in with
+        topdim: the top dimension of simplices to consider
 
-    laplacians = np.load(
-        '{}/{}_laplacians.npy'.format(prefix,starting_node),allow_pickle=True)
-    boundaries = np.load(
-        '{}/{}_boundaries.npy'.format(prefix,starting_node),allow_pickle=True)
-    Ls =[scnn.scnn.coo2tensor(
-        scnn.chebyshev.normalize(
-            laplacians[i],half_interval=True)) for i in range(topdim + 1)]
-    Ds=[scnn.scnn.coo2tensor(
-            boundaries[i].transpose()) for i in range(topdim + 1)]
-    adDs=[scnn.scnn.coo2tensor(boundaries[i]) for i in range(topdim + 1)]
-
-    learning_rate = 0.001
-    batch_size = 5
-    train_steps = 1000
-    topdim = 2
-
-    network = MySCNN(colors = 1)
-    optimizer = torch.optim.Adam(network.parameters(), lr=learning_rate)
-    criterion = nn.L1Loss(reduction="sum")
-
-    num_params = 0
-    print("Parameter counts:")
-    for param in network.parameters():
-        p = np.array(param.shape, dtype=int).prod()
-        print(p)
-        num_params += p
-    print("Total number of parameters: %d" %(num_params))
-
-
-    masks_all_deg = np.load(
-        '{}/{}_percentage_{}_known_values.npy'.format(
-            prefix,starting_node,percentage_missing_values),
-        allow_pickle=True)
-    masks=[list(masks_all_deg[i].values()) for i in range(len(masks_all_deg))]
-
-    losslogf = open("%s/loss.txt" %(logdir), "w")
-
-    cochain_target_alldegs = []
-    signal = np.load('{}/{}_cochains.npy'.format(prefix,starting_node),
-        allow_pickle=True)
+    Returns:
+        A list containing elements consisting of batch_size cochains contained
+        at path
+    """
+    cochains = []
+    signal = np.load(path, allow_pickle=True)
     raw_data=[list(signal[i].values()) for i in range(len(signal))]
 
     for d in range(topdim + 1):
@@ -134,42 +98,109 @@ def main():
         for i in range(0, batch_size):
             cochain_target[i, 0, :] = torch.tensor(raw_data[d],
                 dtype=torch.float, requires_grad = False)
-        cochain_target_alldegs.append(cochain_target)
+        cochains.append(cochain_target)
+    return cochains
 
-    cochain_input_alldegs = []
-    signal = np.load(
-        '{}/{}_percentage_{}_input_damaged.npy'.format(
-            prefix, starting_node, percentage_missing_values),
+def construct_model_inputs(path_prefix, file_identifier, topdim = 2,
+        batch_size = 1, percentage_missing_values = 30):
+    """ Returns the cochain inputs, targets, Laplacians, Ls, Ds, and adDs.
+
+    Args:
+        path_prefix: the directory to look under
+        file_identifier: the unique file identifier for the data
+        topdim: the top dimension of simplices to consider
+
+    Returns:
+        A tuple consisting of the following matrices: Laplacians, Ls, Ds, adDs
+    """
+    cochain_input = load_cochains(
+        path=f'{path_prefix}/{file_identifier}_'
+             f'percentage_{percentage_missing_values}_input_damaged.npy',
+        batch_size=batch_size,
+        topdim=topdim)
+    cochain_target = load_cochains(
+        path=f'{path_prefix}/{file_identifier}_cochains.npy',
+        batch_size=batch_size,
+        topdim=topdim)
+    laplacians = np.load(
+        '{}/{}_laplacians.npy'.format(
+            path_prefix, file_identifier), allow_pickle=True)
+    boundaries = np.load(
+        '{}/{}_boundaries.npy'.format(
+            path_prefix, file_identifier), allow_pickle=True)
+    Ls = [
+            scnn.scnn.coo2tensor(
+                scnn.chebyshev.normalize(
+                    laplacians[i],half_interval=True))
+            for i in range(topdim + 1)
+    ]
+    Ds = [
+            scnn.scnn.coo2tensor(
+                boundaries[i].transpose()) 
+            for i in range(topdim + 1)
+    ]
+    adDs = [
+        scnn.scnn.coo2tensor(boundaries[i]) for i in range(topdim + 1)
+    ]
+    return cochain_input, cochain_target, laplacians, Ls, Ds, adDs
+
+def main():
+    torch.manual_seed(1337)
+    np.random.seed(1337)
+
+    path_prefix = sys.argv[1] # Input
+    logdir = sys.argv[2] # Output
+    file_identifier=sys.argv[3]
+    percentage_missing_values=sys.argv[4]
+    cuda = False
+    learning_rate = 0.001
+    batch_size = 1
+    train_steps = 150
+    topdim = 2
+
+    cochain_train_input, cochain_train_target,\
+        laplacians, Ls, Ds, adDs = construct_model_inputs(
+            path_prefix=path_prefix, file_identifier=file_identifier,
+            topdim=topdim, batch_size=batch_size,
+            percentage_missing_values=percentage_missing_values)
+    network = MySCNN(colors = 1)
+    optimizer = torch.optim.Adam(network.parameters(), lr=learning_rate)
+    criterion = nn.MSELoss(reduction="sum")
+
+    num_params = 0
+    print("Parameter counts:")
+    for param in network.parameters():
+        p = np.array(param.shape, dtype=int).prod()
+        print(p)
+        num_params += p
+    print("Total number of parameters: %d" %(num_params))
+
+    masks_all_deg = np.load(
+        '{}/{}_percentage_{}_known_values.npy'.format(
+            path_prefix,file_identifier,percentage_missing_values),
         allow_pickle=True)
-    raw_data=[list(signal[i].values()) for i in range(len(signal))]
-
-    for d in range(topdim + 1):
-        cochain_input = torch.zeros((batch_size, 1, len(raw_data[d])),
-            dtype=torch.float, requires_grad = False)
-
-        for i in range(0, batch_size):
-            cochain_input[i, 0, :] = torch.tensor(raw_data[d],
-                dtype=torch.float, requires_grad = False)
-        cochain_input_alldegs.append(cochain_input)
+    masks = [list(
+        masks_all_deg[i].values()) for i in range(len(masks_all_deg))]
+    losslogf = open("%s/loss.txt" %(logdir), "w")
 
     print(
         [
-            len(masks[d]) / len(cochain_target_alldegs[d][0,0,:])
+            len(masks[d]) / len(cochain_train_target[d][0,0,:])
                 for d in range(topdim + 1)
         ])
 
     for i in range(train_steps):
         xs = [cochain_input.clone(
-            ) for cochain_input in cochain_input_alldegs]
+            ) for cochain_input in cochain_train_input]
 
         optimizer.zero_grad()
         ys = network(Ls, Ds, adDs, xs)
 
         loss = torch.FloatTensor([0.0])
-        for b in range(0, batch_size):
-            for d in range(0, topdim+1):
+        for b in range(batch_size):
+            for d in range(topdim + 1):
                 loss += criterion(ys[d][
-                    b, 0, masks[d]], cochain_target_alldegs[d][
+                    b, 0, masks[d]], cochain_train_target[d][
                         b, 0, masks[d]])
 
         detached_ys = [ys[d].detach() for d in range(0, topdim+1)]
@@ -187,12 +218,11 @@ def main():
                 for y in detached_ys[d][b, 0, masks[d]]:
                     predictionlogf.write("%f " %(y))
                 predictionlogf.write("\n")
-                for x in cochain_target_alldegs[d][b, 0, masks[d]]:
+                for x in cochain_train_target[d][b, 0, masks[d]]:
                     actuallogf.write("%f " %(x))
                 actuallogf.write("\n")
             predictionlogf.close()
             actuallogf.close()
-
 
         losslogf.write("%d %f\n" %(i, loss.item()))
         losslogf.flush()
@@ -200,6 +230,46 @@ def main():
         optimizer.step()
     losslogf.close()
 
+    # Test against the same set
+    masks = [
+        list(set(range(
+            cochain_train_input[i].shape[-1])) - set(masks_all_deg[i].values()))
+        for i in range(topdim + 1)
+    ]
+    test_criterion = nn.L1Loss(reduction="sum")
+    loss = 0
+    ys = network(Ls, Ds, adDs, cochain_train_input)
+    ys = [torch.round(tensor) for tensor in ys]
+    for d in range(topdim + 1):
+        loss += test_criterion(ys[d][
+            0, 0, masks[d]], cochain_train_target[d][0, 0, masks[d]])
+    print(f'Train set loss: {loss}')
+
+    # Now test the model against our test set
+    cochain_test_input, cochain_test_target,\
+        laplacians, Ls, Ds, adDs = construct_model_inputs(
+            path_prefix=path_prefix,
+            file_identifier='test_' + file_identifier,
+            topdim=topdim,
+            batch_size=batch_size,
+            percentage_missing_values=percentage_missing_values)
+
+    test_masks = np.load('{}/test_{}_percentage_{}_known_values.npy'.format(
+            path_prefix,file_identifier,percentage_missing_values),
+            allow_pickle=True)
+    masks = [
+        list(set(range(
+            cochain_test_input[i].shape[-1])) - set(test_masks[i].values()))
+        for i in range(topdim + 1)
+    ]
+    test_criterion = nn.L1Loss(reduction="sum")
+    loss = 0
+    ys = network(Ls, Ds, adDs, cochain_test_input)
+    ys = [torch.round(tensor) for tensor in ys]
+    for d in range(topdim + 1):
+        loss += test_criterion(ys[d][
+            0, 0, masks[d]], cochain_test_target[d][0, 0, masks[d]])
+    print(f'Test set loss: {loss}')
 
 if __name__ == "__main__":
     main()
