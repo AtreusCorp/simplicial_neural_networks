@@ -81,6 +81,7 @@ Dict[int, Dict[frozenset[str], int]], Dict[int, Dict[frozenset[str], int]]]:
                 simplicial_complex[deg][frozenset(users)] = idx
                 cochain_complex[deg][frozenset(users)] = mutual_val
                 idx += 1
+        print(f'Processed simplices of degree {deg}')
     return simplicial_complex, cochain_complex
 
 if __name__ == '__main__':
@@ -90,7 +91,7 @@ if __name__ == '__main__':
     friend_dict = parse_snap_edgesets(file_path=argv[1])
     print(f'Parsed file {argv[1]}')
     simplices, cochains = build_simplices_cochains(
-        friend_dict=friend_dict, top_deg=3)
+        friend_dict=friend_dict, top_deg=4)
     print('Built complex')
     np.save(
         f's2_3_collaboration_complex/snap_facebook_cochains.npy', cochains)

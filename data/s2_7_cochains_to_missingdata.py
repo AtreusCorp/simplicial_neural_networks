@@ -10,6 +10,7 @@ import numpy as np
 from scipy import sparse
 from scipy.sparse import coo_matrix
 from random import shuffle
+from sys import argv
 
 import time
 
@@ -155,18 +156,22 @@ if __name__ == '__main__':
     start = time.time()
     def timeit(name):
         print('wall time ({}): {:.0f}s'.format(name, time.time() - start))
-    starting_node=150250
     percentage_missing_values=30
 
-    cochains = np.load(f's2_3_collaboration_complex/{starting_node}_cochains.npy')
-    simplices = np.load(f's2_3_collaboration_complex/{starting_node}_simplices.npy')
+    if len(argv) <= 1:
+        path_prefix = 150250
+    else:
+        path_prefix = argv[1]
 
-    missing_values=build_missing_values(simplices,percentage_missing_values=30,max_dim=10)
-    damaged_dataset=build_damaged_dataset(cochains,missing_values,function=np.median)
-    known_values=built_known_values(missing_values,simplices)
+    simplices = np.load(f's2_3_collaboration_complex/{path_prefix}_simplices.npy', allow_pickle=True)
+    cochains = np.load(f's2_3_collaboration_complex/{path_prefix}_cochains.npy', allow_pickle=True)
+
+    missing_values=build_missing_values(simplices, percentage_missing_values=30, max_dim=3)
+    damaged_dataset=build_damaged_dataset(cochains, missing_values, function=np.median)
+    known_values=built_known_values(missing_values, simplices)
 
     timeit('process')
-    np.save(f's2_3_collaboration_complex/{starting_node}_percentage_{percentage_missing_values}_missing_values.npy', missing_values)
-    np.save(f's2_3_collaboration_complex/{starting_node}_percentage_{percentage_missing_values}_input_damaged.npy', damaged_dataset)
-    np.save(f's2_3_collaboration_complex/{starting_node}_percentage_{percentage_missing_values}_known_values.npy', known_values)
+    np.save(f's2_3_collaboration_complex/{path_prefix}_percentage_{percentage_missing_values}_missing_values.npy', missing_values)
+    np.save(f's2_3_collaboration_complex/{path_prefix}_percentage_{percentage_missing_values}_input_damaged.npy', damaged_dataset)
+    np.save(f's2_3_collaboration_complex/{path_prefix}_percentage_{percentage_missing_values}_known_values.npy', known_values)
     timeit('total')

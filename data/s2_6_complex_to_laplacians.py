@@ -81,15 +81,16 @@ if __name__ == '__main__':
 
     if len(argv) <= 1:
         starting_node = 150250
-        in_path = f's2_3_collaboration_complex/{starting_node}_simplices'
+        in_path = f's2_3_collaboration_complex/{starting_node}_'
     else:
-        in_path = f's2_3_collaboration_complex/{argv[1]}_simplices'
+        in_path = f's2_3_collaboration_complex/{argv[1]}_'
 
-    simplices = np.load(in_path + '.npy', allow_pickle=True)
+    simplices = np.load(in_path + 'simplices.npy', allow_pickle=True)
+
     boundaries = build_boundaries(simplices)
     laplacians = build_laplacians(boundaries)
 
     timeit('process')
-    np.save(in_path + '_laplacians.npy', laplacians, allow_pickle=True)
-    np.save(in_path + '_boundaries.npy', boundaries, allow_pickle=True)
+    np.save(in_path + 'laplacians.npy', laplacians, allow_pickle=True)
+    np.save(in_path + 'boundaries.npy', boundaries, allow_pickle=True)
     timeit('total')

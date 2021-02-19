@@ -93,22 +93,18 @@ def main():
     laplacians = np.load('{}/{}_laplacians.npy'.format(prefix,starting_node),allow_pickle=True)
     boundaries = np.load('{}/{}_boundaries.npy'.format(prefix,starting_node),allow_pickle=True)
 
-
-
     Ls =[scnn.scnn.coo2tensor(scnn.chebyshev.normalize(laplacians[i],half_interval=True)) for i in range(topdim+1)] #####scnn.chebyshev.normalize ?
     Ds=[scnn.scnn.coo2tensor(boundaries[i].transpose()) for i in range(topdim+1)]
     adDs=[scnn.scnn.coo2tensor(boundaries[i]) for i in range(topdim+1)]
 
-
     network = MySCNN(colors = 1)
-
 
     learning_rate = 0.001
     optimizer = torch.optim.Adam(network.parameters(), lr=learning_rate)
     criterion = nn.L1Loss(reduction="sum")
     #criterion = nn.MSELoss(reduction="sum")
 
-    batch_size = 1
+    batch_size = 5
 
     num_params = 0
     print("Parameter counts:")
