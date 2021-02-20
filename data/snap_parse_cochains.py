@@ -89,7 +89,7 @@ def build_simplices_cochains(
 if __name__ == '__main__':
 
     # Generate simplicial and cochain complexes from given data
-    assert len(argv)
+    assert len(argv) > 1
     friend_dict = parse_snap_edgesets(file_path=argv[1])
     print(f'Parsed file {argv[1]}')
     simplices, cochains = build_simplices_cochains(

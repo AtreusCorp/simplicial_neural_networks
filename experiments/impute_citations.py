@@ -13,7 +13,7 @@ import scnn.chebyshev
 
 
 class MySCNN(nn.Module):
-    def __init__(self, colors = 1, res_add = False):
+    def __init__(self, colors=1, res_add=False):
         super().__init__()
 
         assert(colors > 0)
