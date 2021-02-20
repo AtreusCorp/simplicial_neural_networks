@@ -157,11 +157,7 @@ if __name__ == '__main__':
     def timeit(name):
         print('wall time ({}): {:.0f}s'.format(name, time.time() - start))
     percentage_missing_values=30
-
-    if len(argv) <= 1:
-        path_prefix = 150250
-    else:
-        path_prefix = argv[1]
+    path_prefix = 150250 if len(argv) <= 1 else argv[1]
 
     simplices = np.load(f's2_3_collaboration_complex/{path_prefix}_simplices.npy', allow_pickle=True)
     cochains = np.load(f's2_3_collaboration_complex/{path_prefix}_cochains.npy', allow_pickle=True)

@@ -173,6 +173,37 @@ class Hparams:
         self.res_add = res_add
 
 
+def _run_test_inference(
+        path_prefix, file_identifier, top_dim, batch_size,
+        percentage_missing_values, network):
+    """ Runs and prints the results of a test inference
+
+    """
+    cochain_test_input, cochain_test_target,\
+        laplacians, Ls, Ds, adDs = construct_model_inputs(
+            path_prefix=path_prefix,
+            file_identifier='test_' + file_identifier,
+            top_dim=top_dim,
+            batch_size=batch_size,
+            percentage_missing_values=percentage_missing_values)
+
+    test_masks = np.load(f'{path_prefix}/test_{file_identifier}_percentage_'
+                         f'{percentage_missing_values}_known_values.npy',
+                         allow_pickle=True)
+    masks = [
+        list(set(range(
+            cochain_test_input[i].shape[-1])) - set(test_masks[i].values()))
+        for i in range(top_dim + 1)
+    ]
+    test_criterion = nn.L1Loss(reduction="sum")
+    loss = 0
+    ys = network(Ls, Ds, adDs, cochain_test_input)
+    for d in range(top_dim + 1):
+        loss += test_criterion(ys[d][
+            0, 0, masks[d]], cochain_test_target[d][0, 0, masks[d]])
+    print(f'Test set loss: {loss}')
+
+
 def train_and_test(hparams: Hparams):
     torch.manual_seed(1337)
     np.random.seed(1337)
@@ -202,10 +233,9 @@ def train_and_test(hparams: Hparams):
         num_params += p
     print(f'Total number of parameters: {num_params}')
 
-    masks_all_deg = np.load(
-        '{}/{}_percentage_{}_known_values.npy'.format(
-            path_prefix,file_identifier,percentage_missing_values),
-        allow_pickle=True)
+    masks_all_deg = np.load(f'{path_prefix}/{file_identifier}_percentage_'
+                            f'{percentage_missing_values}_known_values.npy',
+                            allow_pickle=True)
     masks = [list(
         masks_all_deg[i].values()) for i in range(len(masks_all_deg))]
     losslogf = open(f'{logdir}/loss.txt', "w")
@@ -251,6 +281,12 @@ def train_and_test(hparams: Hparams):
             predictionlogf.close()
             actuallogf.close()
 
+        if not i % 25:
+            print(f'Evaluating test set loss at train step {i}')
+            _run_test_inference(
+                path_prefix, file_identifier, top_dim, batch_size,
+                percentage_missing_values, network)
+
         losslogf.write("%d %f\n" %(i, loss.item()))
         losslogf.flush()
         loss.backward()
@@ -272,29 +308,10 @@ def train_and_test(hparams: Hparams):
     print(f'Train set loss: {loss}')
 
     # Now test the model against our test set
-    cochain_test_input, cochain_test_target,\
-        laplacians, Ls, Ds, adDs = construct_model_inputs(
-            path_prefix=path_prefix,
-            file_identifier='test_' + file_identifier,
-            top_dim=top_dim,
-            batch_size=batch_size,
-            percentage_missing_values=percentage_missing_values)
-
-    test_masks = np.load('{}/test_{}_percentage_{}_known_values.npy'.format(
-            path_prefix,file_identifier,percentage_missing_values),
-            allow_pickle=True)
-    masks = [
-        list(set(range(
-            cochain_test_input[i].shape[-1])) - set(test_masks[i].values()))
-        for i in range(top_dim + 1)
-    ]
-    test_criterion = nn.L1Loss(reduction="sum")
-    loss = 0
-    ys = network(Ls, Ds, adDs, cochain_test_input)
-    for d in range(top_dim + 1):
-        loss += test_criterion(ys[d][
-            0, 0, masks[d]], cochain_test_target[d][0, 0, masks[d]])
-    print(f'Test set loss: {loss}')
+    _run_test_inference(
+        path_prefix, file_identifier, top_dim, batch_size,
+        percentage_missing_values, network)
+    return
 
 
 if __name__ == "__main__":
