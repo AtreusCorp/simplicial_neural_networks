@@ -38,7 +38,6 @@ class MySCNN(nn.Module):
         self.C2_2 = scnn.scnn.SimplicialConvolution(5, num_filters * self.colors, num_filters * self.colors, variance=variance)
         self.C2_3 = scnn.scnn.SimplicialConvolution(5, num_filters * self.colors, self.colors, variance=variance)
 
-
     def forward(self, Ls, Ds, adDs, xs):
         assert(len(xs) == 3) # The three degrees are fed together as a list.
 
@@ -71,14 +70,15 @@ class MySCNN(nn.Module):
         out2_3 = self.C2_3(Ls[2], nn.LeakyReLU()(out2_2)) #+ self.D12_3(nn.LeakyReLU()(out1_2))
 
         if self.res_add:
-            return[
+            return [
                 out0_3 + 0.5 * xs[0],
                 out1_3 + 0.5 * xs[1],
                 out2_3 + 0.5 * xs[2],
             ]
         return [out0_3, out1_3, out2_3]
 
-def load_cochains(path, batch_size = 1, top_dim = 2):
+
+def load_cochains(path, batch_size=1, top_dim=2):
     """ Loads the cochains contained at path.
 
     Args:
@@ -96,22 +96,28 @@ def load_cochains(path, batch_size = 1, top_dim = 2):
 
     for d in range(top_dim + 1):
         cochain_target = torch.zeros((batch_size, 1, len(raw_data[d])),
-            dtype=torch.float, requires_grad = False)
+                                     dtype=torch.float, requires_grad=False)
 
         for i in range(0, batch_size):
             cochain_target[i, 0, :] = torch.tensor(raw_data[d],
-                dtype=torch.float, requires_grad = False)
+                                                   dtype=torch.float,
+                                                   requires_grad=False)
         cochains.append(cochain_target)
     return cochains
 
-def construct_model_inputs(path_prefix, file_identifier, top_dim = 2,
-        batch_size = 1, percentage_missing_values = 30):
+
+def construct_model_inputs(
+        path_prefix, file_identifier, top_dim=2,
+        batch_size=1, percentage_missing_values='30'):
     """ Returns the cochain inputs, targets, Laplacians, Ls, Ds, and adDs.
 
     Args:
         path_prefix: the directory to look under
         file_identifier: the unique file identifier for the data
         top_dim: the top dimension of simplices to consider
+        batch_size: the batch size to use
+        percentage_missing_values: the percentage of missing values to expect.
+            Used for file lookup purposes.
 
     Returns:
         A tuple consisting of the following matrices: Laplacians, Ls, Ds, adDs
@@ -147,7 +153,8 @@ def construct_model_inputs(path_prefix, file_identifier, top_dim = 2,
     ]
     return cochain_input, cochain_target, laplacians, Ls, Ds, adDs
 
-class Hparams():
+
+class Hparams:
     def __init__(
             self,
             learning_rate: float,
@@ -170,10 +177,10 @@ def train_and_test(hparams: Hparams):
     torch.manual_seed(1337)
     np.random.seed(1337)
 
-    path_prefix = sys.argv[1] # Input
-    logdir = sys.argv[2] # Output
-    file_identifier=sys.argv[3]
-    percentage_missing_values=sys.argv[4]
+    path_prefix = sys.argv[1]  # Input
+    logdir = sys.argv[2]  # Output
+    file_identifier = sys.argv[3]
+    percentage_missing_values = sys.argv[4]
     cuda = False
     batch_size = hparams.batch_size
     top_dim = hparams.top_dim
@@ -193,7 +200,7 @@ def train_and_test(hparams: Hparams):
         p = np.array(param.shape, dtype=int).prod()
         print(p)
         num_params += p
-    print("Total number of parameters: %d" %(num_params))
+    print(f'Total number of parameters: {num_params}')
 
     masks_all_deg = np.load(
         '{}/{}_percentage_{}_known_values.npy'.format(
@@ -201,7 +208,7 @@ def train_and_test(hparams: Hparams):
         allow_pickle=True)
     masks = [list(
         masks_all_deg[i].values()) for i in range(len(masks_all_deg))]
-    losslogf = open("%s/loss.txt" %(logdir), "w")
+    losslogf = open(f'{logdir}/loss.txt', "w")
 
     print(
         [
@@ -288,6 +295,7 @@ def train_and_test(hparams: Hparams):
         loss += test_criterion(ys[d][
             0, 0, masks[d]], cochain_test_target[d][0, 0, masks[d]])
     print(f'Test set loss: {loss}')
+
 
 if __name__ == "__main__":
     train_steps = int(sys.argv[5]) if len(sys.argv) > 5 else 30

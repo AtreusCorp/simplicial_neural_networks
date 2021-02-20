@@ -4,8 +4,8 @@ from typing import Dict, Set, List, Iterable, Tuple
 from collections import defaultdict
 from itertools import combinations
 from sys import argv
-from functools import lru_cache
 import numpy as np
+
 
 def parse_snap_edgesets(file_path: str) -> Dict[str, Set[str]]:
     """ Given an edge file from SNAPs Facebook dataset, parse it into a dict.
@@ -21,7 +21,6 @@ def parse_snap_edgesets(file_path: str) -> Dict[str, Set[str]]:
         a dict mapping user ID's to sets containing all of their friend
         user IDs
     """
-
     friend_dict = defaultdict(set)
 
     with open(file_path, 'r') as file:
@@ -30,8 +29,9 @@ def parse_snap_edgesets(file_path: str) -> Dict[str, Set[str]]:
             friend_dict[user].add(friend)
     return friend_dict
 
+
 def cochain_val(
-    users: Iterable[str], friend_dict: Dict[str, Set[str]]) -> int:
+        users: Iterable[str], friend_dict: Dict[str, Set[str]]) -> int:
     """ Returns the number of friends shared by each user in users.
 
     Args:
@@ -47,10 +47,11 @@ def cochain_val(
         return 0
     return len(set.intersection(*(friend_dict[user] for user in users)))
 
-def build_simplices_cochains(
-    friend_dict: Dict[str, Set[str]], top_deg: int) -> Tuple[
-Dict[int, Dict[frozenset[str], int]], Dict[int, Dict[frozenset[str], int]]]:
 
+def build_simplices_cochains(
+        friend_dict: Dict[str, Set[str]], top_deg: int) -> Tuple[
+        List[Dict[frozenset[str], int]], List[Dict[
+            frozenset[str], int]]]:
     """ Builds a simplicial complex from friend_dict.
 
     Constructs one list of dicts who map a frozenset of user ids (strings) to
@@ -83,6 +84,7 @@ Dict[int, Dict[frozenset[str], int]], Dict[int, Dict[frozenset[str], int]]]:
                 idx += 1
         print(f'Processed simplices of degree {deg}')
     return simplicial_complex, cochain_complex
+
 
 if __name__ == '__main__':
 
