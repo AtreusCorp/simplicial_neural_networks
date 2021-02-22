@@ -317,12 +317,12 @@ def train_and_test(hparams: Hparams):
 if __name__ == "__main__":
     train_steps = int(sys.argv[5]) if len(sys.argv) > 5 else 30
     new_hparams = Hparams(
-        learning_rate=0.01,
+        learning_rate=0.001,
         batch_size=1,
         train_steps=train_steps,
         top_dim=2,
-        optimizer=torch.optim.Adagrad,
-        loss_criterion=nn.MSELoss(reduction="sum"),
+        optimizer=torch.optim.AdamW,
+        loss_criterion=nn.L1Loss(reduction="sum"),
         res_add=True,
     )
     original_hparams = Hparams(
